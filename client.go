@@ -92,6 +92,10 @@ type Client interface {
 	// OptionsReader returns a ClientOptionsReader which is a copy of the clientoptions
 	// in use by the client.
 	OptionsReader() ClientOptionsReader
+	//Method to retrieve the Return Code for ZGrab2
+	GetInitialRC() byte
+	//Method to provide an already established connection from ZGrab2
+	SetConn(connection net.Conn)
 }
 
 // client implements the Client interface
@@ -120,6 +124,8 @@ type client struct {
 	commsStopped chan struct{}        // closed when the comms routines have stopped (kept running until after workers have closed to avoid deadlocks)
 	commsobound  chan *PacketAndToken // outgoing publish packets serviced by active comms go routines (maintains compatibility)
 	commsoboundP chan *PacketAndToken // outgoing 'priotity' packet serviced by active comms go routines (maintains compatibility)
+
+	InitialRC byte //Save the Return Code for ZGrab2
 }
 
 // NewClient will create an MQTT v3.1.1 client with all of the options specified
@@ -150,6 +156,16 @@ func NewClient(o *ClientOptions) Client {
 	c.obound = make(chan *PacketAndToken)
 	c.oboundP = make(chan *PacketAndToken)
 	return c
+}
+
+//GetInitialRC allows the ZGrab2 mqtt module to retrieve the retuen code
+func (c *client) GetInitialRC() byte {
+	return c.InitialRC
+}
+
+//Set a connection that has already been established
+func (c *client) SetConn(connection net.Conn) {
+	c.conn = connection
 }
 
 // AddRoute allows you to add a handler for messages on a specific topic
@@ -249,6 +265,8 @@ func (c *client) Connect() Token {
 		var rc byte
 		var err error
 		conn, rc, t.sessionPresent, err = c.attemptConnection()
+		fmt.Println("Im alive")
+		c.InitialRC = rc //Save the Return Code for ZGrab2
 		if err != nil {
 			if c.options.ConnectRetry {
 				DEBUG.Println(CLI, "Connect failed, sleeping for", int(c.options.ConnectRetryInterval.Seconds()), "seconds and will then retry")
