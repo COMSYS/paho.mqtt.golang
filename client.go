@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -94,8 +95,8 @@ type Client interface {
 	OptionsReader() ClientOptionsReader
 	//Method to retrieve the Return Code for ZGrab2
 	GetInitialRC() byte
-	//Method to provide an already established connection from ZGrab2
-	SetConn(connection net.Conn)
+	//Method to provide custom connection method from ZGrab2
+	SetCustomCallback(callbackMethod func() (net.Conn, error))
 }
 
 // client implements the Client interface
@@ -125,7 +126,9 @@ type client struct {
 	commsobound  chan *PacketAndToken // outgoing publish packets serviced by active comms go routines (maintains compatibility)
 	commsoboundP chan *PacketAndToken // outgoing 'priotity' packet serviced by active comms go routines (maintains compatibility)
 
-	InitialRC byte //Save the Return Code for ZGrab2
+	InitialRC       byte                     //Save the Return Code for ZGrab2
+	useCallback     bool                     //Set to true to use custom callback method
+	connectCallback func() (net.Conn, error) //Callback for custom Connection
 }
 
 // NewClient will create an MQTT v3.1.1 client with all of the options specified
@@ -163,9 +166,10 @@ func (c *client) GetInitialRC() byte {
 	return c.InitialRC
 }
 
-//Set a connection that has already been established
-func (c *client) SetConn(connection net.Conn) {
-	c.conn = connection
+//UseCustomCallback configures the client to use a provided callback function to establish a network connection
+func (c *client) SetCustomCallback(callbackMethod func() (net.Conn, error)) {
+	c.useCallback = true
+	c.connectCallback = callbackMethod
 }
 
 // AddRoute allows you to add a handler for messages on a specific topic
@@ -265,7 +269,6 @@ func (c *client) Connect() Token {
 		var rc byte
 		var err error
 		conn, rc, t.sessionPresent, err = c.attemptConnection()
-		fmt.Println("Im alive")
 		c.InitialRC = rc //Save the Return Code for ZGrab2
 		if err != nil {
 			if c.options.ConnectRetry {
@@ -373,7 +376,8 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 		DEBUG.Println(CLI, "about to write new connect msg")
 	CONN:
 		// Start by opening the network connection (tcp, tls, ws) etc
-		conn, err = openConnection(broker, c.options.TLSConfig, c.options.ConnectTimeout, c.options.HTTPHeaders, c.options.WebsocketOptions)
+		//Due to compiling difficulties detour to custom method
+		conn, err = c.Detour(broker)
 		if err != nil {
 			ERROR.Println(CLI, err.Error())
 			WARN.Println(CLI, "failed to connect to broker, trying next")
@@ -414,6 +418,14 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 		}
 	}
 	return conn, rc, sessionPresent, err
+}
+
+//Detour enables the use of the custom Callback methos
+func (c *client) Detour(broker *url.URL) (net.Conn, error) {
+	if c.useCallback {
+		return c.connectCallback()
+	}
+	return openConnection(broker, c.options.TLSConfig, c.options.ConnectTimeout, c.options.HTTPHeaders, c.options.WebsocketOptions)
 }
 
 // Disconnect will end the connection with the server, but not before waiting
