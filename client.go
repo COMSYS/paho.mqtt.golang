@@ -420,7 +420,7 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 	return conn, rc, sessionPresent, err
 }
 
-//Detour enables the use of the custom Callback methos
+//Detour enables the use of the custom Callback method
 func (c *client) Detour(broker *url.URL) (net.Conn, error) {
 	if c.useCallback {
 		return c.connectCallback()
