@@ -387,7 +387,11 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 		DEBUG.Println(CLI, "socket connected to broker")
 
 		// Now we send the perform the MQTT connection handshake
+		//Set Timeout for the Connect
+		conn.SetDeadline(time.Now().Add(c.options.WriteTimeout))
 		rc, sessionPresent = ConnectMQTT(conn, cm, protocolVersion)
+		//Reset Deadline
+		conn.SetDeadline(time.Time{})
 		if rc == packets.Accepted {
 			break // successfully connected
 		}
