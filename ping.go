@@ -54,8 +54,8 @@ func keepalive(c *client, conn io.Writer) {
 				if atomic.LoadInt32(&c.pingOutstanding) == 0 {
 					DEBUG.Println(PNG, "keepalive sending ping")
 					ping := packets.NewControlPacket(packets.Pingreq).(*packets.PingreqPacket)
-					//We don't want to wait behind large messages being sent, the Write call
-					//will block until it it able to send the packet.
+					// We don't want to wait behind large messages being sent, the Write call
+					// will block until it it able to send the packet.
 					atomic.StoreInt32(&c.pingOutstanding, 1)
 					if err := ping.Write(conn); err != nil {
 						ERROR.Println(PNG, err)
@@ -66,7 +66,7 @@ func keepalive(c *client, conn io.Writer) {
 			}
 			if atomic.LoadInt32(&c.pingOutstanding) > 0 && time.Since(pingSent) >= c.options.PingTimeout {
 				CRITICAL.Println(PNG, "pingresp not received, disconnecting")
-				go c.internalConnLost(errors.New("pingresp not received, disconnecting")) // no harm in calling this if the connection is already down (better than stopping!)
+				c.internalConnLost(errors.New("pingresp not received, disconnecting")) // no harm in calling this if the connection is already down (or shutdown is in progress)
 				return
 			}
 		}
