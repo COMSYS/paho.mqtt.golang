@@ -468,12 +468,14 @@ func (c *client) Disconnect(quiesce uint) {
 
 		dm := packets.NewControlPacket(packets.Disconnect).(*packets.DisconnectPacket)
 		dt := newToken(packets.Disconnect)
-		c.oboundP <- &PacketAndToken{p: dm, t: dt}
-
-		// wait for work to finish, or quiesce time consumed
-		DEBUG.Println(CLI, "calling WaitTimeout")
-		dt.WaitTimeout(time.Duration(quiesce) * time.Millisecond)
-		DEBUG.Println(CLI, "WaitTimeout done")
+               select {
+               case c.oboundP <- &PacketAndToken{p: dm, t: dt}:
+                       // wait for work to finish, or quiesce time consumed
+                       DEBUG.Println(CLI, "calling WaitTimeout")
+                       dt.WaitTimeout(time.Duration(quiesce) * time.Millisecond)
+                       DEBUG.Println(CLI, "WaitTimeout done")
+               case <-time.After(time.Duration(quiesce) * time.Millisecond):
+               }
 	} else {
 		WARN.Println(CLI, "Disconnect() called but not connected (disconnected/reconnecting)")
 		c.setConnected(disconnected)
